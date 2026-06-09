@@ -2,6 +2,7 @@
 .venv/
 venv/
 env/
+ENV/
 
 # Veritabanı
 *.db
@@ -10,9 +11,20 @@ env/
 __pycache__/
 *.pyc
 *.pyo
-*.pyc
 *.pyd
-.Python
+*.py[codz]
+*$py.class
+
+# Dağıtım / paketleme
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Test / coverage
+.coverage
+.pytest_cache/
+htmlcov/
 
 # IDE
 .vscode/
@@ -25,3 +37,13 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Büyük veri dosyaları
+data/raw/train.csv
+*.csv
+
+# Diğer
+.env
+.mypy_cache/
+.ruff_cache/
+tempCodeRunnerFile.py
