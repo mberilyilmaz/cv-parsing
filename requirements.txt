@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+plotly
+spacy
+nltk
+pdfminer.six
+PyPDF2
+pdfplumber

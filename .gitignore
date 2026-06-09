@@ -1,0 +1,27 @@
+# Sanal ortam
+.venv/
+venv/
+env/
+
+# Veritabanı
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyc
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+desktop.ini
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
