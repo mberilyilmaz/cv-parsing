@@ -42,6 +42,10 @@ Thumbs.db
 data/raw/train.csv
 *.csv
 
+# Loglar
+logs/
+*.log
+
 # Diğer
 .env
 .mypy_cache/

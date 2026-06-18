@@ -1,9 +1,53 @@
-streamlit
-pandas
-numpy
-plotly
-spacy
-nltk
-pdfminer.six
-PyPDF2
+# Web Framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+sqlalchemy
+asyncpg
+psycopg2-binary
+alembic
+
+# PDF / OCR
 pdfplumber
+PyMuPDF
+PyPDF2
+pdfminer.six
+easyocr
+Pillow
+
+# NLP / ML
+spacy
+sentence-transformers
+transformers
+torch
+scikit-learn
+numpy
+pandas
+
+# Text Processing
+nltk
+rapidfuzz
+langdetect
+
+# Validation / Settings
+pydantic
+pydantic-settings
+python-dotenv
+
+# Frontend
+streamlit
+plotly
+altair
+requests
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+
+# Utilities
+loguru
+tenacity
+tqdm
