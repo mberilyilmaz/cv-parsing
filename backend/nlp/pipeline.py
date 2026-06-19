@@ -27,6 +27,19 @@ INTERN_RE = re.compile(r"\b(intern|internship|trainee|apprentice)\b", re.I)
 MONTH_YEAR_RE = re.compile(
     r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(19|20)\d{2}\b", re.I
 )
+# Full month-year range, e.g. "August 2024 - September 2024"
+MONTH_YEAR_RANGE_RE = re.compile(
+    r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(?:19|20)\d{2}"
+    r"\s*[-–—]\s*"
+    r"(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(?:19|20)\d{2}"
+    r"|present|current|now)", re.I,
+)
+# A line that is purely a date/period (so it isn't mistaken for a company)
+_DATE_LINE_RE = re.compile(
+    r"^[\s\-–—]*(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*)?"
+    r"(?:19|20)\d{2}\s*[-–—].*$", re.I,
+)
+TITLE_SEPARATOR_RE = re.compile(r"\s+[-–—|]\s+")
 
 
 def _split_blocks(text: str) -> List[List[str]]:
@@ -44,13 +57,16 @@ def _split_blocks(text: str) -> List[List[str]]:
 
 
 def _parse_period(text: str) -> Optional[str]:
-    m = YEAR_RANGE_RE.search(text)
+    m_range = MONTH_YEAR_RANGE_RE.search(text)   # "August 2024 - September 2024"
+    if m_range:
+        return m_range.group(0)
+    m = YEAR_RANGE_RE.search(text)               # "2024 - 2025"
     if m:
         return m.group(0)
-    m2 = MONTH_YEAR_RE.search(text)
+    m2 = MONTH_YEAR_RE.search(text)              # "August 2024"
     if m2:
         return m2.group(0)
-    m3 = SINGLE_YEAR_RE.search(text)
+    m3 = SINGLE_YEAR_RE.search(text)             # "2024"
     return m3.group(0) if m3 else None
 
 
@@ -98,30 +114,66 @@ def _parse_education_blocks(section_text: str) -> List[Dict]:
     return results
 
 
+def _split_experience_entries(section_text: str) -> List[List[str]]:
+    """
+    Split an experience section into one block per entry.
+    Handles entries separated by blank lines AND entries packed back-to-back
+    (each starting with a job-title line, e.g. 'Intern - Company').
+    """
+    from backend.nlp.entity_extractor import is_job_title_line
+    entries: List[List[str]] = []
+    for block in _split_blocks(section_text):
+        # Find job-title line positions within the block
+        title_idx = [i for i, l in enumerate(block) if is_job_title_line(l)]
+        # If 0 or 1 title lines, keep block as a single entry
+        if len(title_idx) <= 1:
+            entries.append(block)
+            continue
+        # Multiple titles → split so each entry starts at a title line
+        starts = title_idx if title_idx[0] == 0 else [0] + title_idx
+        for j, start in enumerate(starts):
+            end = starts[j + 1] if j + 1 < len(starts) else len(block)
+            sub = block[start:end]
+            if sub:
+                entries.append(sub)
+    return entries
+
+
 def _parse_experience_blocks(section_text: str, entry_type: str = "work") -> List[Dict]:
     results = []
-    for block in _split_blocks(section_text):
+    for block in _split_experience_entries(section_text):
         text = "\n".join(block)
         period = _parse_period(text)
         is_current = bool(re.search(r"\b(present|current|now)\b", text, re.I))
         duration = _estimate_duration_months(period)
 
-        title_line = next((l for l in block if is_job_title_line(l)), None)
         from backend.nlp.entity_extractor import is_company_line, COMPANY_SUFFIXES
-        company_line = next(
-            (l for l in block if is_company_line(l) and l != title_line), None
-        )
+
+        # Lines that are purely a date/period should never be title or company
+        content_lines = [l for l in block if not _DATE_LINE_RE.match(l)]
+
+        title_line = next((l for l in content_lines if is_job_title_line(l)), None)
+
+        # Case: "Title - Company, Location" packed on one line → split on separator
+        if title_line and TITLE_SEPARATOR_RE.search(title_line):
+            parts = TITLE_SEPARATOR_RE.split(title_line, maxsplit=1)
+            title_line = parts[0].strip()
+            company_line = parts[1].strip() if len(parts) > 1 else None
+        else:
+            company_line = next(
+                (l for l in content_lines if is_company_line(l) and l != title_line), None
+            )
 
         if not title_line and not company_line:
-            title_line = block[0] if block else None
-            company_line = block[1] if len(block) > 1 else None
+            title_line = content_lines[0] if content_lines else None
+            company_line = content_lines[1] if len(content_lines) > 1 else None
         elif title_line and not company_line:
             company_line = next(
-                (l for l in block if l != title_line and not YEAR_RANGE_RE.search(l)), None
+                (l for l in content_lines if l != title_line), None
             )
         elif company_line and not title_line:
             title_line = next(
-                (l for l in block if l != company_line and not YEAR_RANGE_RE.search(l)), None
+                (l for l in content_lines if l != company_line), None
             )
 
         used = {title_line, company_line}
@@ -202,6 +254,14 @@ def parse_resume(raw_text: str) -> Dict[str, Any]:
 
     total_years = _total_experience_years(experiences)
 
+    # Trained ML model: predict job category from resume text
+    try:
+        from backend.ml.category_classifier import predict_category
+        category_prediction = predict_category(cleaned)
+    except Exception as e:
+        logger.warning(f"Category prediction skipped: {e}")
+        category_prediction = None
+
     summary_section = sections.get("summary", "")
 
     logger.info(f"Pipeline complete: {len(skills)} skills, {len(education)} edu, {len(experiences)} exp")
@@ -221,6 +281,7 @@ def parse_resume(raw_text: str) -> Dict[str, Any]:
         "projects":                projects,
         "certifications":          certifications,
         "total_experience_years":  total_years,
+        "predicted_category":      category_prediction,
         "cleaned_text":            cleaned,
         "sections_detected":       list(sections.keys()),
     }

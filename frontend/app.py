@@ -119,6 +119,18 @@ if page == "Resume Upload & Parse":
                 cid    = data["candidate_id"]
 
                 st.success(f"Parsed successfully — Candidate ID: {cid}")
+
+                # ── Trained ML model prediction
+                pred = parsed.get("predicted_category")
+                if pred:
+                    conf = pred.get("confidence", 0) * 100
+                    top3 = ", ".join(f"{t['category']} ({t['score']*100:.0f}%)" for t in pred.get("top3", []))
+                    st.info(
+                        f"🧠 **Predicted Job Category (trained ML model):** "
+                        f"**{pred['category']}** — confidence {conf:.1f}%  \n"
+                        f"Top-3: {top3}"
+                    )
+
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # ── Stats strip
